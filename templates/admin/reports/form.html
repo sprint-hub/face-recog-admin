@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Generate Report - Face Verification{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h2 mb-2">Generate Report</h1>
+        <p class="text-secondary">Create verification reports for analysis</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            {{ form.start_date|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.end_date|as_crispy_field }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.client|as_crispy_field }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.status|as_crispy_field }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.format|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <hr class="border-secondary">
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'core:dashboard' %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-file-export me-2"></i>Generate Report
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

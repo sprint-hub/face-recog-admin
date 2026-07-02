@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Verifications - Face Verification{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h2 mb-2">Verifications</h1>
+        <p class="text-secondary">Monitor and manage all verification attempts</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <input type="text" name="q" class="form-control" placeholder="Search by ID or client..." value="{{ query }}">
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+                    <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                    <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="type" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="face_bvn" {% if type_filter == 'face_bvn' %}selected{% endif %}>Face + BVN</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter me-2"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Verifications Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Client</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Face Score</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for verification in page_obj %}
+                    <tr>
+                        <td>
+                            <code class="text-secondary" style="font-size: 0.75rem;">{{ verification.id|truncatechars:8 }}</code>
+                        </td>
+                        <td>{{ verification.client.company_name|truncatechars:20 }}</td>
+                        <td>
+                            {% if verification.user %}
+                                {{ verification.user.get_full_name|default:verification.user.email }}
+                            {% else %}
+                                <span class="text-secondary">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-info">{{ verification.get_verification_type_display }}</span>
+                        </td>
+                        <td>
+                            {% if verification.face_match_score %}
+                                <div class="d-flex align-items-center">
+                                    <div class="progress" style="width: 50px; height: 4px;">
+                                        <div class="progress-bar bg-{% if verification.face_match_score >= 80 %}success{% elif verification.face_match_score >= 60 %}warning{% else %}danger{% endif %}" 
+                                             style="width: {{ verification.face_match_score }}%"></div>
+                                    </div>
+                                    <span class="ms-2" style="font-size: 0.875rem;">{{ verification.face_match_score|floatformat:0 }}%</span>
+                                </div>
+                            {% else %}
+                                <span class="text-secondary">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if verification.status == 'success' %}success{% elif verification.status == 'pending' %}warning{% else %}danger{% endif %}">
+                                {{ verification.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div style="font-size: 0.875rem;">{{ verification.started_at|date:"Y-m-d" }}</div>
+                            <small class="text-secondary">{{ verification.started_at|time:"H:i" }}</small>
+                        </td>
+                        <td>
+                            <a href="{% url 'core:verification_detail' verification.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <i class="fas fa-check-circle fa-3x text-secondary mb-3 d-block"></i>
+                            <p class="text-secondary mb-0">No verifications found</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Clients - Face Verification{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-2">Clients</h1>
+                <p class="text-secondary">Manage your client accounts</p>
+            </div>
+            <a href="{% url 'core:create_client' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Client
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Search clients..." value="{{ query }}">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                    <option value="suspended" {% if status_filter == 'suspended' %}selected{% endif %}>Suspended</option>
+                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="tier" class="form-select">
+                    <option value="">All Tiers</option>
+                    <option value="basic" {% if tier_filter == 'basic' %}selected{% endif %}>Basic</option>
+                    <option value="premium" {% if tier_filter == 'premium' %}selected{% endif %}>Premium</option>
+                    <option value="enterprise" {% if tier_filter == 'enterprise' %}selected{% endif %}>Enterprise</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <a href="{% url 'core:clients_list' %}" class="btn btn-secondary w-100">
+                    <i class="fas fa-times me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Clients Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Company</th>
+                        <th>Email</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                        <th>Tier</th>
+                        <th>Verifications</th>
+                        <th>API Key</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for client in page_obj %}
+                    <tr>
+                        <td>
+                            <div>
+                                <div class="fw-bold">{{ client.company_name }}</div>
+                                <small class="text-secondary">Created: {{ client.created_at|date:"Y-m-d" }}</small>
+                            </div>
+                        </td>
+                        <td>
+                            <div>{{ client.user.email }}</div>
+                            <small class="text-secondary">{{ client.user.get_full_name }}</small>
+                        </td>
+                        <td>
+                            <span class="fw-bold {% if client.balance > 0 %}text-success{% else %}text-danger{% endif %}">
+                                ${{ client.balance|floatformat:2 }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if client.status == 'active' %}success{% elif client.status == 'suspended' %}warning{% else %}secondary{% endif %}">
+                                {{ client.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if client.tier == 'enterprise' %}info{% elif client.tier == 'premium' %}primary{% else %}secondary{% endif %}">
+                                {{ client.get_tier_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div>
+                                {{ client.verifications_this_month }}/{{ client.monthly_verification_limit }}
+                                <div class="progress" style="height: 4px; width: 60px;">
+                                    <div class="progress-bar bg-primary" style="width: {% widthratio client.verifications_this_month client.monthly_verification_limit 100 %}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <code class="bg-dark p-1 rounded text-secondary" style="font-size: 0.7rem;">
+                                {{ client.api_key|truncatechars:12 }}
+                            </code>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'core:client_detail' client.id %}" class="btn btn-outline-primary" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'core:fund_client' client.id %}" class="btn btn-outline-success" title="Fund Wallet">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </a>
+                                <button class="btn btn-outline-secondary" title="More" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="#">
+                                            <i class="fas fa-edit me-2"></i>Edit
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item text-danger" href="#">
+                                            <i class="fas fa-trash me-2"></i>Delete
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <i class="fas fa-building fa-3x text-secondary mb-3 d-block"></i>
+                            <p class="text-secondary mb-0">No clients found</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if tier_filter %}&tier={{ tier_filter }}{% endif %}">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if tier_filter %}&tier={{ tier_filter }}{% endif %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if tier_filter %}&tier={{ tier_filter }}{% endif %}">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Fund {{ client.company_name }} - Face Verification{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'core:clients_list' %}">Clients</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'core:client_detail' client.id %}">{{ client.company_name }}</a></li>
+                <li class="breadcrumb-item active">Fund Wallet</li>
+            </ol>
+        </nav>
+        
+        <h1 class="h2 mb-2">Fund Client Wallet</h1>
+        <p class="text-secondary">Add funds to {{ client.company_name }}'s wallet</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body p-4">
+                <!-- Client Summary -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 p-3 rounded-3 me-3">
+                                <i class="fas fa-building text-primary fa-2x"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">{{ client.company_name }}</h6>
+                                <small class="text-secondary">{{ client.user.email }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="bg-success bg-opacity-10 p-3 rounded-3 text-end">
+                            <small class="text-secondary d-block">Current Balance</small>
+                            <h3 class="text-success mb-0">${{ client.balance|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="border-secondary">
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <!-- Fund Amount -->
+                    <h5 class="mb-3">
+                        <i class="fas fa-money-bill-wave text-primary me-2"></i>Add Funds
+                    </h5>
+                    
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text">$</span>
+                                {{ form.amount|as_crispy_field }}
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(50)">$50</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(100)">$100</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(250)">$250</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(500)">$500</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setAmount(1000)">$1,000</button>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            {{ form.notes|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.payment_method|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.reference_id|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <hr class="border-secondary">
+
+                    <!-- Info Alert -->
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> Funds will be added to the client's wallet immediately and can be used for verification services.
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'core:client_detail' client.id %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-plus-circle me-2"></i>Add Funds
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Quick Stats -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-simple me-2"></i>Quick Stats
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-secondary small text-uppercase fw-bold">Total Spent</label>
+                    <p class="h4 mb-0">${{ client.total_spent|floatformat:2|default:"0.00" }}</p>
+                </div>
+                <div class="mb-3">
+                    <label class="text-secondary small text-uppercase fw-bold">Verifications Used</label>
+                    <p class="h4 mb-0">{{ client.verifications_this_month }} / {{ client.monthly_verification_limit }}</p>
+                    <div class="progress mt-1" style="height: 4px;">
+                        <div class="progress-bar bg-primary" style="width: {% widthratio client.verifications_this_month client.monthly_verification_limit 100 %}%"></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-secondary small text-uppercase fw-bold">Tier</label>
+                    <p class="h4 mb-0">
+                        <span class="badge bg-{% if client.tier == 'enterprise' %}info{% elif client.tier == 'premium' %}primary{% else %}secondary{% endif %}">
+                            {{ client.get_tier_display }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-clock me-2"></i>Recent Transactions
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for transaction in recent_transactions %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">
+                                    <span class="badge bg-{% if transaction.is_credit %}success{% else %}danger{% endif %} me-2">
+                                        {{ transaction.get_transaction_type_display }}
+                                    </span>
+                                    {% if transaction.is_credit %}+{% else %}-{% endif %}${{ transaction.amount|floatformat:2 }}
+                                </div>
+                                <small class="text-secondary">{{ transaction.created_at|timesince }} ago</small>
+                            </div>
+                            <span class="badge bg-{% if transaction.status == 'completed' %}success{% elif transaction.status == 'pending' %}warning{% else %}danger{% endif %}">
+                                {{ transaction.get_status_display }}
+                            </span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="list-group-item text-center py-3 text-secondary">
+                        No recent transactions
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setAmount(amount) {
+    // Find the amount input field (crispy forms might generate a different ID)
+    const amountInput = document.querySelector('input[name="amount"]');
+    if (amountInput) {
+        amountInput.value = amount;
+        // Trigger input event for any validation
+        amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
+// Add client-side validation for amount
+document.addEventListener('DOMContentLoaded', function() {
+    const amountInput = document.querySelector('input[name="amount"]');
+    if (amountInput) {
+        amountInput.addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            if (value < 0) {
+                this.setCustomValidity('Amount must be greater than 0');
+            } else if (value > 999999.99) {
+                this.setCustomValidity('Amount is too large');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

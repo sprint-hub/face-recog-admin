@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Verification Details - Face Verification{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'core:verifications_list' %}">Verifications</a></li>
+                <li class="breadcrumb-item active">Details</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="h2 mb-2">Verification Details</h1>
+                <p class="text-secondary">ID: <code>{{ verification.id }}</code></p>
+            </div>
+            <span class="badge badge-{% if verification.status == 'success' %}success{% elif verification.status == 'pending' %}warning{% else %}danger{% endif %}" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                {{ verification.get_status_display }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Basic Info -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-info-circle me-2"></i>Basic Information
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-4 text-secondary">Client:</div>
+                    <div class="col-8">
+                        <a href="{% url 'core:client_detail' verification.client.id %}">
+                            {{ verification.client.company_name }}
+                        </a>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-4 text-secondary">User:</div>
+                    <div class="col-8">
+                        {% if verification.user %}
+                            {{ verification.user.get_full_name|default:verification.user.email }}
+                        {% else %}
+                            <span class="text-secondary">Unknown</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-4 text-secondary">Type:</div>
+                    <div class="col-8">
+                        <span class="badge badge-info">{{ verification.get_verification_type_display }}</span>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-4 text-secondary">Started:</div>
+                    <div class="col-8">{{ verification.started_at|date:"Y-m-d H:i:s" }}</div>
+                </div>
+                <div class="row">
+                    <div class="col-4 text-secondary">Completed:</div>
+                    <div class="col-8">
+                        {% if verification.completed_at %}
+                            {{ verification.completed_at|date:"Y-m-d H:i:s" }}
+                        {% else %}
+                            <span class="text-secondary">Not completed</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scores -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-bar me-2"></i>Scores & Metrics
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-secondary">Face Match Score</span>
+                        <span>{{ verification.face_match_score|default:"N/A" }}</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-{% if verification.face_match_score >= 80 %}success{% elif verification.face_match_score >= 60 %}warning{% else %}danger{% endif %}" 
+                             style="width: {{ verification.face_match_score|default:0 }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-secondary">Liveness Score</span>
+                        <span>{{ verification.liveness_score|default:"N/A" }}</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-{% if verification.liveness_score >= 80 %}success{% elif verification.liveness_score >= 60 %}warning{% else %}danger{% endif %}" 
+                             style="width: {{ verification.liveness_score|default:0 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BVN Information (if available) -->
+    {% if verification.bvn_verification %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-id-card me-2"></i>BVN Information
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="text-secondary mb-1">Status</div>
+                        <span class="badge badge-{% if verification.bvn_verification.status == 'success' %}success{% else %}danger{% endif %}">
+                            {{ verification.bvn_verification.get_status_display }}
+                        </span>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-secondary mb-1">Full Name</div>
+                        <div>
+                            {{ verification.bvn_verification.first_name }} 
+                            {{ verification.bvn_verification.middle_name|default:'' }} 
+                            {{ verification.bvn_verification.last_name }}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-secondary mb-1">Date of Birth</div>
+                        <div>{{ verification.bvn_verification.date_of_birth|date:"Y-m-d"|default:"N/A" }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-secondary mb-1">Phone Number</div>
+                        <div>{{ verification.bvn_verification.phone_number|default:"N/A" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Media Files -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-image me-2"></i>Media Files
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% if verification.selfie_image %}
+                    <div class="col-md-4">
+                        <div class="text-secondary mb-2">Selfie Image</div>
+                        <img src="{{ verification.selfie_image }}" alt="Selfie" class="img-fluid rounded" style="max-height: 200px;">
+                    </div>
+                    {% endif %}
+                    {% if verification.id_image %}
+                    <div class="col-md-4">
+                        <div class="text-secondary mb-2">ID Image</div>
+                        <img src="{{ verification.id_image }}" alt="ID" class="img-fluid rounded" style="max-height: 200px;">
+                    </div>
+                    {% endif %}
+                    {% if verification.video %}
+                    <div class="col-md-4">
+                        <div class="text-secondary mb-2">Verification Video</div>
+                        <video controls style="max-height: 200px;" class="w-100 rounded">
+                            <source src="{{ verification.video }}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    {% endif %}
+                    {% if not verification.selfie_image and not verification.id_image and not verification.video %}
+                    <div class="text-center text-secondary py-3">
+                        <i class="fas fa-image fa-2x mb-2 d-block"></i>
+                        No media files available
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device & Location Info -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-devices me-2"></i>Device & Location Information
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="text-secondary mb-1">IP Address</div>
+                        <div>{{ verification.ip_address|default:"N/A" }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary mb-1">Device</div>
+                        <div>{{ verification.device_info|default:"N/A" }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary mb-1">Location</div>
+                        <div>{{ verification.location_data|default:"N/A" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="{% url 'core:verifications_list' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to List
+    </a>
+</div>
+{% endblock %}

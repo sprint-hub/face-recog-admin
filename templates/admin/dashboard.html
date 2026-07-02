@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard - Face Verification{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h2 mb-2">Dashboard</h1>
+        <p class="text-secondary">Welcome back, {{ user.get_full_name|default:user.email }}!</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Total Clients</div>
+                    <div class="stat-number">{{ total_clients }}</div>
+                    <small class="text-secondary">
+                        <i class="fas fa-circle text-success me-1" style="font-size: 0.5rem;"></i>
+                        {{ active_clients }} Active
+                    </small>
+                </div>
+                <div class="stat-icon purple">
+                    <i class="fas fa-building"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Verifications</div>
+                    <div class="stat-number">{{ total_verifications }}</div>
+                    <small class="text-secondary">
+                        <i class="fas fa-circle text-success me-1" style="font-size: 0.5rem;"></i>
+                        {{ successful_verifications }} Success
+                    </small>
+                </div>
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Pending</div>
+                    <div class="stat-number">{{ pending_verifications }}</div>
+                    <small class="text-secondary">Awaiting review</small>
+                </div>
+                <div class="stat-icon yellow">
+                    <i class="fas fa-clock"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Revenue (30d)</div>
+                    <div class="stat-number">₦{{ total_revenue|floatformat:2 }}</div>
+                    <small class="text-secondary">Last 30 days</small>
+                </div>
+                <div class="stat-icon blue">
+                    <i class="fas fa-naira-sign"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i>
+                Verification Trends (Last 7 Days)
+            </div>
+            <div class="card-body">
+                <canvas id="trendChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie me-2"></i>
+                Status Distribution
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row g-3">
+    <div class="col-xl-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-history me-2"></i>Recent Transactions</span>
+                <a href="#" class="text-decoration-none text-secondary" style="font-size: 0.875rem;">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Client</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in recent_transactions %}
+                            <tr>
+                                <td>
+                                    <code class="text-secondary" style="font-size: 0.75rem;">{{ transaction.reference|truncatechars:12 }}</code>
+                                </td>
+                                <td>{{ transaction.client.company_name|truncatechars:20 }}</td>
+                                <td>
+                                    <span class="{% if transaction.is_credit %}text-success{% else %}text-danger{% endif %}">
+                                        {% if transaction.is_credit %}+{% else %}-{% endif %}
+                                        ₦{{ transaction.amount }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-{% if transaction.status == 'completed' %}success{% elif transaction.status == 'pending' %}warning{% else %}danger{% endif %}">
+                                        {{ transaction.get_status_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-3 text-secondary">
+                                    <i class="fas fa-inbox mb-2 d-block"></i>
+                                    No recent transactions
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-camera me-2"></i>Recent Verifications</span>
+                <a href="{% url 'core:verifications_list' %}" class="text-decoration-none text-secondary" style="font-size: 0.875rem;">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Client</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for verification in recent_verifications %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'core:verification_detail' verification.id %}" class="text-decoration-none">
+                                        {{ verification.id|truncatechars:8 }}
+                                    </a>
+                                </td>
+                                <td>{{ verification.client.company_name|truncatechars:15 }}</td>
+                                <td>
+                                    <span class="badge badge-info">{{ verification.get_verification_type_display }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-{% if verification.status == 'success' %}success{% elif verification.status == 'pending' %}warning{% else %}danger{% endif %}">
+                                        {{ verification.get_status_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-3 text-secondary">
+                                    <i class="fas fa-inbox mb-2 d-block"></i>
+                                    No recent verifications
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Trend Chart
+        const ctx1 = document.getElementById('trendChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Verifications',
+                    data: [12, 19, 15, 22, 18, 14, 20],
+                    backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                    borderColor: '#7c3aed',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#7c3aed',
+                    pointBorderColor: '#7c3aed',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: '#8b949e'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#8b949e'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Status Chart
+        const ctx2 = document.getElementById('statusChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: ['Success', 'Failed', 'Pending'],
+                datasets: [{
+                    data: [
+                        {{ successful_verifications }},
+                        {{ total_verifications|add:successful_verifications|add:pending_verifications|floatformat:0 }},
+                        {{ pending_verifications }}
+                    ],
+                    backgroundColor: ['#22c55e', '#ef4444', '#eab308'],
+                    borderWidth: 2,
+                    borderColor: '#1c2333'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#8b949e',
+                            padding: 15,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    });
+</script>
+{% endblock %}

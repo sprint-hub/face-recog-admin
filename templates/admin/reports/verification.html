@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Verification Report - Face Verification{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Verification Report</h1>
+        <p class="subtitle">
+            {{ start_date|date:"Y-m-d" }} to {{ end_date|date:"Y-m-d" }}
+            {% if client %} - {{ client.company_name }}{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print
+        </button>
+        <a href="{% url 'core:generate_report' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Total Verifications</div>
+            <div class="stat-number">{{ total }}</div>
+        </div>
+        <div class="stat-icon purple">
+            <i class="fas fa-check-circle"></i>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Successful</div>
+            <div class="stat-number text-success">{{ successful }}</div>
+        </div>
+        <div class="stat-icon green">
+            <i class="fas fa-check"></i>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Failed</div>
+            <div class="stat-number text-danger">{{ failed }}</div>
+        </div>
+        <div class="stat-icon yellow">
+            <i class="fas fa-times"></i>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Revenue</div>
+            <div class="stat-number text-info">₦{{ revenue|floatformat:2|intcomma }}</div>
+        </div>
+        <div class="stat-icon blue">
+            <i class="fas fa-naira-sign"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Report Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Client</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Face Score</th>
+                        <th>Liveness Score</th>
+                        <th>Cost</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for verification in verifications %}
+                    <tr>
+                        <td>
+                            <code class="text-secondary" style="font-size: 0.75rem;">
+                                {{ verification.id|truncatechars:8 }}
+                            </code>
+                        </td>
+                        <td>{{ verification.client.company_name|truncatechars:20 }}</td>
+                        <td>
+                            <span class="badge badge-info">
+                                {{ verification.get_verification_type_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if verification.status == 'success' %}success{% elif verification.status == 'pending' %}warning{% else %}danger{% endif %}">
+                                {{ verification.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ verification.face_match_score|default:"N/A" }}</td>
+                        <td>{{ verification.liveness_score|default:"N/A" }}</td>
+                        <td>₦{{ verification.cost|floatformat:2 }}</td>
+                        <td>{{ verification.started_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="fas fa-inbox fa-2x text-secondary mb-2 d-block"></i>
+                            <p class="text-secondary">No verifications found for this period</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Footer -->
+<div class="mt-3" style="display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 13px;">
+    <span>Total Records: {{ total }}</span>
+    <span>Generated on: {% now "Y-m-d H:i" %}</span>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    @media print {
+        .sidebar, .topbar, .actions, .no-print {
+            display: none !important;
+        }
+        .main-content {
+            margin-left: 0 !important;
+        }
+        .page-content {
+            padding: 10px !important;
+        }
+        .stat-card {
+            break-inside: avoid;
+        }
+        .card {
+            break-inside: avoid;
+            border: 1px solid #ddd;
+        }
+        body {
+            background: white !important;
+            color: black !important;
+        }
+        .text-secondary {
+            color: #666 !important;
+        }
+        .badge {
+            border: 1px solid #ddd;
+        }
+    }
+</style>
+{% endblock %}
