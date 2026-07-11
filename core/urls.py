@@ -22,4 +22,7 @@ urlpatterns = [
     path('reports/', views.generate_report, name='generate_report'),
     path('api/client-stats/', views.get_client_stats, name='get_client_stats'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
+    path('api/clients/validate-key/', views.validate_api_key, name='validate_api_key'),
+    path('api/clients/track-usage/', views.track_verification_usage, name='track_usage'),
+    path('api/webhook/verification/', views.verification_webhook, name='verification_webhook'),
 ]

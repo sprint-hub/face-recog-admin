@@ -22,6 +22,13 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
+INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET")
+
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://localhost:8000")
+
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',

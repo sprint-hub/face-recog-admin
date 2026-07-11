@@ -1,8 +1,12 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_POST
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum, Count
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
@@ -12,8 +16,14 @@ from django.urls import reverse_lazy
 from django.http import HttpResponse, JsonResponse
 import csv
 import json
+import logging
+import uuid
+import hashlib
 from .models import (Client, ClientWallet, Transaction, Verification, BVNVerification, AuditLog, User)
 from .forms import (ClientForm, FundClientForm, VerificationReportForm, LoginForm, ClientEditForm, UserProfileForm)
+
+
+logger = logging.getLogger(__name__)
 
 
 # ============ AUTHENTICATION VIEWS ============
@@ -742,3 +752,329 @@ def recent_activity(request):
         ]
     }
     return JsonResponse(data)
+
+
+@csrf_exempt
+@require_GET
+def validate_api_key(request):
+    """
+    Validate API key for FastAPI
+    
+    Headers:
+        X-API-Key: Client's API key
+        X-Internal-Secret: Internal secret for service-to-service auth
+    
+    Returns:
+        JSON with client data if valid
+    """
+    
+    # Verify internal secret
+    internal_secret = request.headers.get('X-Internal-Secret')
+    if internal_secret != getattr(settings, 'INTERNAL_API_SECRET', None):
+        logger.warning("Invalid internal secret for API key validation")
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    # Get API key from header
+    api_key = request.headers.get('X-API-Key')
+    if not api_key:
+        return JsonResponse({'error': 'API key required'}, status=400)
+    
+    try:
+        # Find client by API key
+        client = Client.objects.select_related('wallet').get(api_key=api_key)
+        
+        # Check if client is active
+        if client.status != 'active':
+            return JsonResponse({
+                'valid': False,
+                'status': client.status,
+                'message': f'Client account is {client.status}'
+            }, status=403)
+        
+        # Get wallet balance
+        balance = client.wallet.current_balance if hasattr(client, 'wallet') else Decimal('0.00')
+        
+        # Count verifications this month
+        current_month = timezone.now().month
+        current_year = timezone.now().year
+        verifications_this_month = client.verifications.filter(
+            started_at__month=current_month,
+            started_at__year=current_year
+        ).count()
+        
+        # Prepare response
+        response_data = {
+            'valid': True,
+            'id': str(client.id),
+            'company_name': client.company_name,
+            'status': client.status,
+            'tier': client.tier,
+            'balance': float(balance),
+            'monthly_verification_limit': client.monthly_verification_limit,
+            'verifications_this_month': verifications_this_month,
+            'total_spent': float(client.total_spent or Decimal('0.00')),
+            'created_at': client.created_at.isoformat()
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Client.DoesNotExist:
+        return JsonResponse({
+            'valid': False,
+            'message': 'Invalid API key'
+        }, status=401)
+        
+    except Exception as e:
+        logger.error(f"API key validation error: {str(e)}")
+        return JsonResponse({
+            'valid': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_POST
+def track_verification_usage(request):
+    """
+    Track verification usage for client (called by FastAPI)
+    
+    Headers:
+        X-Internal-Secret: Internal secret for service-to-service auth
+    
+    Body:
+        {
+            "api_key": "fv_xxx",
+            "bvn": "00000000010",
+            "success": true,
+            "timestamp": "2026-06-23T10:30:00Z"
+        }
+    """
+    
+    # Verify internal secret
+    internal_secret = request.headers.get('X-Internal-Secret')
+    if internal_secret != getattr(settings, 'INTERNAL_API_SECRET', None):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        api_key = data.get('api_key')
+        
+        if not api_key:
+            return JsonResponse({'error': 'API key required'}, status=400)
+        
+        # Find client
+        client = Client.objects.get(api_key=api_key)
+        
+        # Update usage statistics
+        client.verifications_this_month += 1
+        client.save(update_fields=['verifications_this_month'])
+        
+        # Update total spent (if verification was successful, charge fee)
+        if data.get('success', False):
+            # Get verification cost from your settings or model
+            verification_cost = Decimal('50.00')  # Default cost
+            
+            try:
+                # Create transaction for the verification fee
+                transaction = Transaction.objects.create(
+                    client=client,
+                    transaction_type='verification_fee',
+                    amount=verification_cost,
+                    is_credit=False,
+                    balance_before=client.wallet.current_balance,
+                    balance_after=client.wallet.current_balance - verification_cost,
+                    reference=f"VER_{uuid.uuid4().hex[:12].upper()}",
+                    description=f"Verification fee for BVN {data.get('bvn', '')}",
+                    status='completed',
+                    created_by=None
+                )
+                
+                # Update wallet balance
+                client.wallet.current_balance -= verification_cost
+                client.wallet.save()
+                
+                # Update total spent
+                client.total_spent = (client.total_spent or Decimal('0.00')) + verification_cost
+                client.save(update_fields=['total_spent'])
+                
+            except Exception as e:
+                logger.error(f"Billing error for client {client.company_name}: {str(e)}")
+                # Don't fail the tracking if billing fails
+        
+        return JsonResponse({
+            'status': 'success',
+            'client_id': str(client.id),
+            'verifications_this_month': client.verifications_this_month,
+            'remaining_limit': client.monthly_verification_limit - client.verifications_this_month
+        })
+        
+    except Client.DoesNotExist:
+        return JsonResponse({'error': 'Client not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Usage tracking error: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_POST
+def verification_webhook(request):
+    """
+    Receive verification data from FastAPI
+    
+    Headers:
+        X-Webhook-Secret: Webhook secret for authentication
+    
+    Expected payload:
+    {
+        "verification_id": "uuid",
+        "bvn": "00000000010",
+        "client_id": "client-uuid",
+        "api_key": "fv_xxx",
+        "matched": true,
+        "similarity_score": 95.67,
+        "verification_time": "2026-06-23T10:30:00Z",
+        "ip_address": "192.168.1.1",
+        "user_agent": "Mozilla/5.0"
+    }
+    """
+    
+    # Verify webhook secret
+    webhook_secret = request.headers.get('X-Webhook-Secret')
+    if webhook_secret != getattr(settings, 'WEBHOOK_SECRET', None):
+        logger.warning(f"Invalid webhook secret")
+        return JsonResponse({'error': 'Invalid webhook secret'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        logger.info(f"📥 Webhook received: {data.get('verification_id')}")
+        
+        # Find client
+        client = None
+        client_id = data.get('client_id')
+        api_key = data.get('api_key')
+        
+        if client_id:
+            try:
+                client = Client.objects.get(id=client_id)
+                logger.info(f" Found client by ID: {client.company_name}")
+            except Client.DoesNotExist:
+                pass
+        
+        if not client and api_key:
+            try:
+                client = Client.objects.get(api_key=api_key)
+                logger.info(f" Found client by API key: {client.company_name}")
+            except Client.DoesNotExist:
+                pass
+        
+        if not client:
+            logger.error(f"Client not found - ID: {client_id}, API Key: {api_key[:10] if api_key else 'None'}...")
+            return JsonResponse({'error': 'Client not found'}, status=404)
+        
+        with transaction.atomic():
+            
+            # Create or update BVN verification
+            bvn = data.get('bvn')
+            bvn_verification = None
+            
+            if bvn:
+                # Check if BVN verification already exists
+                bvn_verification = BVNVerification.objects.filter(bvn=bvn).first()
+                
+                if not bvn_verification:
+                    # Create new BVN verification
+                    bvn_verification = BVNVerification.objects.create(
+                        client=client,
+                        bvn=bvn,
+                        hash_bvn=hashlib.sha256(bvn.encode()).hexdigest(),
+                        status='success' if data.get('matched') else 'failed',
+                        verified_at=timezone.now()
+                    )
+            
+            # Create Verification record
+            verification = Verification.objects.create(
+                client=client,
+                bvn_verification=bvn_verification,
+                user=None,  # Can link to user if needed
+                status='success' if data.get('matched') else 'failed',
+                face_match_score=data.get('similarity_score', 0.0),
+                liveness_score=data.get('liveness_score', 0.0),
+                verification_type='face_bvn',
+                ip_address=data.get('ip_address', ''),
+                device_info={'user_agent': data.get('user_agent', '')},
+                completed_at=timezone.now()
+            )
+            
+            logger.info(f" Verification created: {verification.id}")
+            
+            # Create audit log
+            AuditLog.objects.create(
+                user=None,
+                client=client,
+                action='create',
+                model_name='Verification',
+                record_id=str(verification.id),
+                changes={
+                    'verification_id': data.get('verification_id'),
+                    'bvn': bvn,
+                    'status': verification.status,
+                    'face_match_score': verification.face_match_score,
+                    'ip_address': data.get('ip_address', ''),
+                    'source': 'fastapi_webhook'
+                },
+                ip_address=data.get('ip_address', ''),
+                user_agent=data.get('user_agent', '')
+            )
+            
+            # Update client usage
+            client.verifications_this_month += 1
+            client.save(update_fields=['verifications_this_month'])
+            
+            # Charge client for verification (if successful)
+            if verification.status == 'success':
+                try:
+                    cost = verification.cost
+                    
+                    # Create transaction
+                    transaction_obj = Transaction.objects.create(
+                        client=client,
+                        transaction_type='verification_fee',
+                        amount=cost,
+                        is_credit=False,
+                        balance_before=client.wallet.current_balance,
+                        balance_after=client.wallet.current_balance - cost,
+                        reference=f"VER_{verification.id[:8]}_{bvn[-4:] if bvn else '0000'}",
+                        description=f"Verification fee for BVN ending {bvn[-4:] if bvn else 'N/A'}",
+                        status='completed',
+                        created_by=None
+                    )
+                    
+                    # Update wallet balance
+                    client.wallet.current_balance -= cost
+                    client.wallet.save()
+                    
+                    # Update total spent
+                    client.total_spent = (client.total_spent or Decimal('0.00')) + cost
+                    client.save(update_fields=['total_spent'])
+                    
+                    logger.info(f" Charged ${cost} to {client.company_name}")
+                    
+                except Exception as e:
+                    logger.error(f" Billing error: {str(e)}")
+                    # Don't fail the webhook if billing fails
+        
+        return JsonResponse({
+            'status': 'success',
+            'verification_id': verification.id,
+            'message': 'Verification stored successfully'
+        })
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON format'}, status=400)
+        
+    except Exception as e:
+        logger.error(f"Webhook error: {str(e)}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
