@@ -1,0 +1,1 @@
+web: gunicorn face_verification_project.wsgi:application --bind 0.0.0.0:$PORT
