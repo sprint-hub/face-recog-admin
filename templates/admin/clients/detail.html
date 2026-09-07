@@ -42,7 +42,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="card-title text-white-50 mb-2">Balance</h6>
-                        <h3 class="mb-0">${{ client.balance|floatformat:2 }}</h3>
+                        <h3 class="mb-0">₦{{ client.balance|floatformat:2 }}</h3>
                     </div>
                     <i class="fas fa-wallet fa-2x text-white-50"></i>
                 </div>
@@ -196,7 +196,7 @@
                                     </span>
                                 </td>
                                 <td class="{% if transaction.is_credit %}text-success{% else %}text-danger{% endif %}">
-                                    {% if transaction.is_credit %}+{% else %}-{% endif %}${{ transaction.amount|floatformat:2 }}
+                                    {% if transaction.is_credit %}+{% else %}-{% endif %}₦{{ transaction.amount|floatformat:2 }}
                                 </td>
                                 <td>
                                     <span class="badge bg-{% if transaction.status == 'completed' %}success{% elif transaction.status == 'pending' %}warning{% else %}danger{% endif %}">

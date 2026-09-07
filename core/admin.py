@@ -58,10 +58,10 @@ class ClientAdmin(admin.ModelAdmin):
         if hasattr(obj, 'wallet'):
             color = 'green' if obj.balance > 0 else 'red'
             return format_html(
-                '<span style="color: {}; font-weight: bold;">${:.2f}</span>',
+                '<span style="color: {}; font-weight: bold;">₦{:.2f}</span>',
                 color, obj.balance
             )
-        return format_html('<span style="color: gray;">$0.00</span>')
+        return format_html('<span style="color: gray;">₦0.00</span>')
     balance_display.short_description = 'Balance'
     balance_display.admin_order_field = 'wallet__current_balance'
     
@@ -80,7 +80,7 @@ class TransactionAdmin(admin.ModelAdmin):
         color = 'green' if obj.is_credit else 'red'
         sign = '+' if obj.is_credit else '-'
         return format_html(
-            '<span style="color: {}; font-weight: bold;">{}${:.2f}</span>',
+            '<span style="color: {}; font-weight: bold;">{}₦{:.2f}</span>',
             color, sign, obj.amount
         )
     amount_display.short_description = 'Amount'

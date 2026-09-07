@@ -39,7 +39,7 @@
                     <div class="col-md-6">
                         <div class="bg-success bg-opacity-10 p-3 rounded-3 text-end">
                             <small class="text-secondary d-block">Current Balance</small>
-                            <h3 class="text-success mb-0">${{ client.balance|floatformat:2 }}</h3>
+                            <h3 class="text-success mb-0">₦{{ client.balance|floatformat:2 }}</h3>
                         </div>
                     </div>
                 </div>
@@ -57,15 +57,15 @@
                     <div class="row g-3">
                         <div class="col-12">
                             <div class="input-group input-group-lg">
-                                <span class="input-group-text">$</span>
+                                <span class="input-group-text">₦</span>
                                 {{ form.amount|as_crispy_field }}
                             </div>
                             <div class="mt-2">
-                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(50)">$50</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(100)">$100</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(250)">$250</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(500)">$500</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setAmount(1000)">$1,000</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(50)">₦50</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(100)">₦100</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(250)">₦250</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setAmount(500)">₦500</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setAmount(1000)">₦1,000</button>
                             </div>
                         </div>
                         <div class="col-12">
@@ -113,11 +113,11 @@
             <div class="card-body">
                 <div class="mb-3">
                     <label class="text-secondary small text-uppercase fw-bold">Total Spent</label>
-                    <p class="h4 mb-0">${{ client.total_spent|floatformat:2|default:"0.00" }}</p>
+                    <p class="h4 mb-0">₦{{ client.total_spent|floatformat:2|default:"0.00" }}</p>
                 </div>
                 <div class="mb-3">
                     <label class="text-secondary small text-uppercase fw-bold">Verifications Used</label>
-                    <p class="h4 mb-0">{{ client.verifications_this_month }} / {{ client.monthly_verification_limit }}</p>
+                    <p class="h4 mb-0">₦{{ client.verifications_this_month }} / ₦{{ client.monthly_verification_limit }}</p>
                     <div class="progress mt-1" style="height: 4px;">
                         <div class="progress-bar bg-primary" style="width: {% widthratio client.verifications_this_month client.monthly_verification_limit 100 %}%"></div>
                     </div>
@@ -150,7 +150,7 @@
                                     <span class="badge bg-{% if transaction.is_credit %}success{% else %}danger{% endif %} me-2">
                                         {{ transaction.get_transaction_type_display }}
                                     </span>
-                                    {% if transaction.is_credit %}+{% else %}-{% endif %}${{ transaction.amount|floatformat:2 }}
+                                    {% if transaction.is_credit %}+{% else %}-{% endif %}₦{{ transaction.amount|floatformat:2 }}
                                 </div>
                                 <small class="text-secondary">{{ transaction.created_at|timesince }} ago</small>
                             </div>

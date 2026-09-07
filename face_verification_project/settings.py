@@ -144,3 +144,7 @@ AUTHENTICATION_BACKENDS = [
     'core.backends.EmailAuthBackend',  
     'django.contrib.auth.backends.ModelBackend',  
 ]
+
+CURRENCY_SYMBOL = '₦'
+CURRENCY_CODE = 'NGN'
+CURRENCY_FORMAT = '{symbol}{amount}'  
