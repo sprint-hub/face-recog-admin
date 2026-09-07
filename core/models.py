@@ -306,7 +306,7 @@ class Verification(models.Model):
     def cost(self):
         """Calculate verification cost based on type"""
         costs = {
-            'face_bvn': Decimal('50.00'),
+            'face_bvn': Decimal('100.00'),
             'face_only': Decimal('30.00'),
             'face_nin': Decimal('75.00'),
         }

@@ -879,7 +879,6 @@ def track_verification_usage(request):
 def verification_webhook(request):
     """
     Receive verification data from FastAPI
-    This is the SINGLE source of truth for billing.
     """
     
     # Verify webhook secret
@@ -955,7 +954,7 @@ def verification_webhook(request):
                 client=client,
                 action='create',
                 model_name='Verification',
-                record_id=str(verification.id),
+                record_id=str(verification.id),  
                 changes={
                     'verification_id': data.get('verification_id'),
                     'bvn': bvn,
@@ -969,10 +968,12 @@ def verification_webhook(request):
             )
             
             # Charge client for verification (ONLY if successful and not already charged)
-            # Check if already charged to prevent duplicates
+            verification_id_str = str(verification.id)
+            
+            # Check if already charged
             already_charged = Transaction.objects.filter(
                 client=client,
-                reference__icontains=f"VER_{verification.id[:8]}",
+                reference__icontains=f"VER_{verification_id_str[:8]}",  
                 transaction_type='verification_fee'
             ).exists()
             
@@ -980,12 +981,10 @@ def verification_webhook(request):
                 try:
                     cost = verification.cost
                     
-                    # Check if client has sufficient balance
-                    if client.wallet.current_balance < cost:
-                        logger.warning(f"Insufficient balance for {client.company_name}: {client.wallet.current_balance} < {cost}")
-                        # Still return success but log the issue
+                    # Create transaction with fixed reference
+                    bvn_suffix = bvn[-4:] if bvn and len(bvn) >= 4 else '0000'
+                    transaction_ref = f"VER_{verification_id_str[:8]}_{bvn_suffix}"
                     
-                    # Create transaction
                     transaction_obj = Transaction.objects.create(
                         client=client,
                         transaction_type='verification_fee',
@@ -993,8 +992,8 @@ def verification_webhook(request):
                         is_credit=False,
                         balance_before=client.wallet.current_balance,
                         balance_after=client.wallet.current_balance - cost,
-                        reference=f"VER_{verification.id[:8]}_{bvn[-4:] if bvn else '0000'}",
-                        description=f"Verification fee for BVN ending {bvn[-4:] if bvn else 'N/A'}",
+                        reference=transaction_ref,
+                        description=f"Verification fee for BVN ending {bvn_suffix}",
                         status='completed',
                         created_by=None
                     )
@@ -1011,15 +1010,13 @@ def verification_webhook(request):
                     
                 except Exception as e:
                     logger.error(f"Billing error: {str(e)}")
-                    # Don't fail the webhook if billing fails
-                    # You might want to queue this for retry
             else:
                 if already_charged:
                     logger.info(f"Skipping duplicate charge for verification {verification.id}")
         
         return JsonResponse({
             'status': 'success',
-            'verification_id': verification.id,
+            'verification_id': str(verification.id),  # Convert to string for JSON
             'message': 'Verification stored successfully'
         })
         
