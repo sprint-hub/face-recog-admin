@@ -87,7 +87,7 @@
                         </td>
                         <td>
                             <span class="fw-bold {% if client.balance > 0 %}text-success{% else %}text-danger{% endif %}">
-                                ${{ client.balance|floatformat:2 }}
+                                {{ client.balance|floatformat:2 }}
                             </span>
                         </td>
                         <td>

@@ -163,7 +163,7 @@ class FundClientForm(forms.Form):
             'step': '0.01',
             'placeholder': '0.00'
         }),
-        label="Amount to Fund ($)"
+        label="Amount to Fund (₦)"
     )
     description = forms.CharField(
         widget=forms.Textarea(attrs={
@@ -189,7 +189,7 @@ class FundClientForm(forms.Form):
         if amount <= 0:
             raise forms.ValidationError('Amount must be greater than zero.')
         if amount > 1000000:
-            raise forms.ValidationError('Maximum funding amount is $1,000,000.')
+            raise forms.ValidationError('Maximum funding amount is ₦1,000,000.')
         return amount
 
 class VerificationReportForm(forms.Form):

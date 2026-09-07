@@ -374,7 +374,7 @@ def fund_client(request, pk):
         if form.is_valid():
             try:
                 amount = form.cleaned_data['amount']
-                notes = form.cleaned_data.get('notes', '')  # Changed from 'description' to 'notes'
+                notes = form.cleaned_data.get('notes', '') 
                 payment_method = form.cleaned_data.get('payment_method', 'manual')
                 reference_id = form.cleaned_data.get('reference_id', '')
                 
@@ -389,7 +389,7 @@ def fund_client(request, pk):
                     is_credit=True,
                     balance_before=balance_before,
                     balance_after=wallet.current_balance,
-                    description=notes,  # Store notes in description field
+                    description=notes,  
                     status='completed',
                     payment_method=payment_method,
                     reference_id=reference_id,
@@ -410,7 +410,7 @@ def fund_client(request, pk):
                 
                 messages.success(
                     request, 
-                    f'Successfully funded {client.company_name} with ${amount:.2f}'
+                    f'Successfully funded {client.company_name} with {amount:.2f}'
                 )
                 return redirect('core:client_detail', pk=client.id)
                 
@@ -932,15 +932,22 @@ def verification_webhook(request):
                         verified_at=timezone.now()
                     )
             
+            # Determine verification status
+            is_successful = data.get('matched', False)
+            verification_status = 'success' if is_successful else 'failed'
+            
+            # Get verification type from request or use default
+            verification_type = data.get('verification_type', 'face_bvn')
+            
             # Create Verification record
             verification = Verification.objects.create(
                 client=client,
                 bvn_verification=bvn_verification,
                 user=None,
-                status='success' if data.get('matched') else 'failed',
+                status=verification_status,
                 face_match_score=data.get('similarity_score', 0.0),
                 liveness_score=data.get('liveness_score', 0.0),
-                verification_type='face_bvn',
+                verification_type=verification_type,  
                 ip_address=data.get('ip_address', ''),
                 device_info={'user_agent': data.get('user_agent', '')},
                 completed_at=timezone.now()
@@ -954,36 +961,52 @@ def verification_webhook(request):
                 client=client,
                 action='create',
                 model_name='Verification',
-                record_id=str(verification.id),  
+                record_id=str(verification.id),
                 changes={
                     'verification_id': data.get('verification_id'),
                     'bvn': bvn,
                     'status': verification.status,
                     'face_match_score': verification.face_match_score,
                     'ip_address': data.get('ip_address', ''),
-                    'source': 'fastapi_webhook'
+                    'source': 'fastapi_webhook',
+                    'verification_type': verification_type
                 },
                 ip_address=data.get('ip_address', ''),
                 user_agent=data.get('user_agent', '')
             )
+
+            # Update verification counts (regardless of success/failure)
+            client.verifications_this_month += 1
+            client.save(update_fields=['verifications_this_month'])
             
-            # Charge client for verification (ONLY if successful and not already charged)
+            logger.info(
+                f"Usage updated for {client.company_name}: "
+                f"{client.verifications_this_month} total verifications "
+                f"(successful: {is_successful})"
+            )
+            
+            # ===== CHARGE BASED ON VERIFICATION TYPE =====
+            
             verification_id_str = str(verification.id)
             
-            # Check if already charged
+            # Check if already charged to prevent duplicates
             already_charged = Transaction.objects.filter(
                 client=client,
-                reference__icontains=f"VER_{verification_id_str[:8]}",  
+                reference__icontains=f"VER_{verification_id_str[:8]}",
                 transaction_type='verification_fee'
             ).exists()
             
-            if verification.status == 'success' and not already_charged:
+            if not already_charged:
                 try:
-                    cost = verification.cost
+                    # Get the cost from the verification model's property
+                    cost = verification.cost  # This uses your @property that defines rates
                     
                     # Create transaction with fixed reference
                     bvn_suffix = bvn[-4:] if bvn and len(bvn) >= 4 else '0000'
                     transaction_ref = f"VER_{verification_id_str[:8]}_{bvn_suffix}"
+                    
+                    # Determine transaction description
+                    status_text = 'successful' if is_successful else 'failed'
                     
                     transaction_obj = Transaction.objects.create(
                         client=client,
@@ -993,7 +1016,7 @@ def verification_webhook(request):
                         balance_before=client.wallet.current_balance,
                         balance_after=client.wallet.current_balance - cost,
                         reference=transaction_ref,
-                        description=f"Verification fee for BVN ending {bvn_suffix}",
+                        description=f"{verification_type} verification ({status_text}) for BVN ending {bvn_suffix}",
                         status='completed',
                         created_by=None
                     )
@@ -1006,17 +1029,22 @@ def verification_webhook(request):
                     client.total_spent = (client.total_spent or Decimal('0.00')) + cost
                     client.save(update_fields=['total_spent'])
                     
-                    logger.info(f"Charged ${cost} to {client.company_name}")
+                    logger.info(f"Charged {cost} to {client.company_name} for {verification_type} ({status_text})")
                     
                 except Exception as e:
                     logger.error(f"Billing error: {str(e)}")
+                    # Don't fail the webhook if billing fails
+                    # Consider adding to a retry queue
             else:
-                if already_charged:
-                    logger.info(f"Skipping duplicate charge for verification {verification.id}")
+                logger.info(f"Skipping duplicate charge for verification {verification.id}")
         
         return JsonResponse({
             'status': 'success',
-            'verification_id': str(verification.id),  # Convert to string for JSON
+            'verification_id': str(verification.id),
+            'verification_status': verification_status,
+            'verification_type': verification_type,
+            'amount_charged': str(verification.cost),
+            'total_verifications': client.verifications_this_month,
             'message': 'Verification stored successfully'
         })
         
