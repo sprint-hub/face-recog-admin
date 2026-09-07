@@ -837,17 +837,6 @@ def validate_api_key(request):
 def track_verification_usage(request):
     """
     Track verification usage for client (called by FastAPI)
-    
-    Headers:
-        X-Internal-Secret: Internal secret for service-to-service auth
-    
-    Body:
-        {
-            "api_key": "fv_xxx",
-            "bvn": "xxxxxx00010",
-            "success": true,
-            "timestamp": "2026-06-23T10:30:00Z"
-        }
     """
     
     # Verify internal secret
@@ -865,41 +854,9 @@ def track_verification_usage(request):
         # Find client
         client = Client.objects.get(api_key=api_key)
         
-        # Update usage statistics
+        # Update usage statistics ONLY
         client.verifications_this_month += 1
         client.save(update_fields=['verifications_this_month'])
-        
-        # Update total spent (if verification was successful, charge fee)
-        if data.get('success', False):
-            # Get verification cost from your settings or model
-            verification_cost = Decimal('50.00')  # Default cost
-            
-            try:
-                # Create transaction for the verification fee
-                transaction = Transaction.objects.create(
-                    client=client,
-                    transaction_type='verification_fee',
-                    amount=verification_cost,
-                    is_credit=False,
-                    balance_before=client.wallet.current_balance,
-                    balance_after=client.wallet.current_balance - verification_cost,
-                    reference=f"VER_{uuid.uuid4().hex[:12].upper()}",
-                    description=f"Verification fee for BVN {data.get('bvn', '')}",
-                    status='completed',
-                    created_by=None
-                )
-                
-                # Update wallet balance
-                client.wallet.current_balance -= verification_cost
-                client.wallet.save()
-                
-                # Update total spent
-                client.total_spent = (client.total_spent or Decimal('0.00')) + verification_cost
-                client.save(update_fields=['total_spent'])
-                
-            except Exception as e:
-                logger.error(f"Billing error for client {client.company_name}: {str(e)}")
-                # Don't fail the tracking if billing fails
         
         return JsonResponse({
             'status': 'success',
@@ -922,22 +879,7 @@ def track_verification_usage(request):
 def verification_webhook(request):
     """
     Receive verification data from FastAPI
-    
-    Headers:
-        X-Webhook-Secret: Webhook secret for authentication
-    
-    Expected payload:
-    {
-        "verification_id": "uuid",
-        "bvn": "xxxxxx00010",
-        "client_id": "client-uuid",
-        "api_key": "fv_xxx",
-        "matched": true,
-        "similarity_score": 95.67,
-        "verification_time": "2026-06-23T10:30:00Z",
-        "ip_address": "192.168.1.1",
-        "user_agent": "Mozilla/5.0"
-    }
+    This is the SINGLE source of truth for billing.
     """
     
     # Verify webhook secret
@@ -948,7 +890,7 @@ def verification_webhook(request):
     
     try:
         data = json.loads(request.body)
-        logger.info(f"📥 Webhook received: {data.get('verification_id')}")
+        logger.info(f"Webhook received: {data.get('verification_id')}")
         
         # Find client
         client = None
@@ -958,14 +900,14 @@ def verification_webhook(request):
         if client_id:
             try:
                 client = Client.objects.get(id=client_id)
-                logger.info(f" Found client by ID: {client.company_name}")
+                logger.info(f"Found client by ID: {client.company_name}")
             except Client.DoesNotExist:
                 pass
         
         if not client and api_key:
             try:
                 client = Client.objects.get(api_key=api_key)
-                logger.info(f" Found client by API key: {client.company_name}")
+                logger.info(f"Found client by API key: {client.company_name}")
             except Client.DoesNotExist:
                 pass
         
@@ -980,11 +922,9 @@ def verification_webhook(request):
             bvn_verification = None
             
             if bvn:
-                # Check if BVN verification already exists
                 bvn_verification = BVNVerification.objects.filter(bvn=bvn).first()
                 
                 if not bvn_verification:
-                    # Create new BVN verification
                     bvn_verification = BVNVerification.objects.create(
                         client=client,
                         bvn=bvn,
@@ -997,7 +937,7 @@ def verification_webhook(request):
             verification = Verification.objects.create(
                 client=client,
                 bvn_verification=bvn_verification,
-                user=None,  # Can link to user if needed
+                user=None,
                 status='success' if data.get('matched') else 'failed',
                 face_match_score=data.get('similarity_score', 0.0),
                 liveness_score=data.get('liveness_score', 0.0),
@@ -1007,7 +947,7 @@ def verification_webhook(request):
                 completed_at=timezone.now()
             )
             
-            logger.info(f" Verification created: {verification.id}")
+            logger.info(f"Verification created: {verification.id}")
             
             # Create audit log
             AuditLog.objects.create(
@@ -1028,14 +968,22 @@ def verification_webhook(request):
                 user_agent=data.get('user_agent', '')
             )
             
-            # Update client usage
-            client.verifications_this_month += 1
-            client.save(update_fields=['verifications_this_month'])
+            # Charge client for verification (ONLY if successful and not already charged)
+            # Check if already charged to prevent duplicates
+            already_charged = Transaction.objects.filter(
+                client=client,
+                reference__icontains=f"VER_{verification.id[:8]}",
+                transaction_type='verification_fee'
+            ).exists()
             
-            # Charge client for verification (if successful)
-            if verification.status == 'success':
+            if verification.status == 'success' and not already_charged:
                 try:
                     cost = verification.cost
+                    
+                    # Check if client has sufficient balance
+                    if client.wallet.current_balance < cost:
+                        logger.warning(f"Insufficient balance for {client.company_name}: {client.wallet.current_balance} < {cost}")
+                        # Still return success but log the issue
                     
                     # Create transaction
                     transaction_obj = Transaction.objects.create(
@@ -1059,11 +1007,15 @@ def verification_webhook(request):
                     client.total_spent = (client.total_spent or Decimal('0.00')) + cost
                     client.save(update_fields=['total_spent'])
                     
-                    logger.info(f" Charged ${cost} to {client.company_name}")
+                    logger.info(f"Charged ${cost} to {client.company_name}")
                     
                 except Exception as e:
-                    logger.error(f" Billing error: {str(e)}")
+                    logger.error(f"Billing error: {str(e)}")
                     # Don't fail the webhook if billing fails
+                    # You might want to queue this for retry
+            else:
+                if already_charged:
+                    logger.info(f"Skipping duplicate charge for verification {verification.id}")
         
         return JsonResponse({
             'status': 'success',
