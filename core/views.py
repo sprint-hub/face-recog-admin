@@ -844,7 +844,7 @@ def track_verification_usage(request):
     Body:
         {
             "api_key": "fv_xxx",
-            "bvn": "00000000010",
+            "bvn": "xxxxxx00010",
             "success": true,
             "timestamp": "2026-06-23T10:30:00Z"
         }
@@ -929,7 +929,7 @@ def verification_webhook(request):
     Expected payload:
     {
         "verification_id": "uuid",
-        "bvn": "00000000010",
+        "bvn": "xxxxxx00010",
         "client_id": "client-uuid",
         "api_key": "fv_xxx",
         "matched": true,
